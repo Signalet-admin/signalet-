@@ -1,0 +1,19 @@
+{
+  "name": "Signalet Forex Signals",
+  "short_name": "Signalet",
+  "description": "Free EUR/USD signal calculator and demo journal",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090e1b",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
