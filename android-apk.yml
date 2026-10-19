@@ -1,0 +1,89 @@
+name: Signalet Android APK from source ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Signalet_Mobile_Source.zip'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Test and build Android ARM64 debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Confirm source ZIP exists
+        run: test -s Signalet_Mobile_Source.zip
+
+      - name: Extract mobile source
+        run: unzip -q -o Signalet_Mobile_Source.zip -d _signalet_source
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android runner and resolve dependencies
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: bash tool/bootstrap_platforms.sh
+
+      - name: Format Dart source
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: dart format lib test
+
+      - name: Verify privacy and source invariants
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: python3 tool/verify_source.py
+
+      - name: Analyze Dart code
+        id: analyze
+        continue-on-error: true
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: flutter analyze --no-pub
+
+      - name: Run unit tests
+        id: tests
+        continue-on-error: true
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: flutter test --no-pub --reporter expanded
+
+      - name: Build Android ARM64 debug APK
+        id: build
+        continue-on-error: true
+        working-directory: _signalet_source/Signalet_Mobile_Source
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Upload APK if produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalet-android-arm64-debug-apk
+          path: _signalet_source/Signalet_Mobile_Source/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail the workflow if validation or build failed
+        if: always()
+        env:
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          if [[ "$ANALYZE_OUTCOME" != "success" || "$TESTS_OUTCOME" != "success" || "$BUILD_OUTCOME" != "success" ]]; then
+            echo "::error::Review Analyze, Tests, and Build logs. Any uploaded APK is not accepted as validated unless all three steps succeed."
+            exit 1
+          fi
